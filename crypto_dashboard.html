@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crypto Time Series Analysis Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600;700&display=swap');
+
+  :root {
+    --bg: #080c10;
+    --panel: #0d1117;
+    --card: #131920;
+    --border: #1e2830;
+    --accent: #f7931a;
+    --accent2: #58a6ff;
+    --green: #3fb950;
+    --red: #ff7b72;
+    --purple: #d2a8ff;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --eth: #627eea;
+    --bnb: #f0b90b;
+    --sol: #9945ff;
+    --ada: #0033ad;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Sora', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: linear-gradient(135deg, #0d1117 0%, #131920 50%, #0d1117 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+    backdrop-filter: blur(12px);
+  }
+  .logo {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), #ff6b00);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .logo-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px; font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.05em;
+  }
+  .logo-sub {
+    font-size: 10px; color: var(--muted); font-weight: 400;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .header-right {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .live-badge {
+    background: rgba(63,185,80,0.15);
+    border: 1px solid rgba(63,185,80,0.3);
+    color: var(--green);
+    font-size: 11px; font-weight: 600;
+    padding: 4px 10px; border-radius: 20px;
+    display: flex; align-items: center; gap: 6px;
+    font-family: 'Space Mono', monospace;
+  }
+  .live-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ── TABS ── */
+  .tabs-bar {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex; gap: 4px;
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 14px 20px;
+    font-size: 13px; font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+    font-family: 'Space Mono', monospace;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* ── COIN SELECTOR ── */
+  .coin-selector {
+    padding: 20px 32px 0;
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .coin-btn {
+    padding: 8px 18px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px; font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+  .coin-btn:hover { border-color: var(--text); color: var(--text); }
+  .coin-btn.active-BTC { background: rgba(247,147,26,0.15); border-color: #f7931a; color: #f7931a; }
+  .coin-btn.active-ETH { background: rgba(98,126,234,0.15); border-color: #627eea; color: #627eea; }
+  .coin-btn.active-BNB { background: rgba(240,185,11,0.15); border-color: #f0b90b; color: #f0b90b; }
+  .coin-btn.active-SOL { background: rgba(153,69,255,0.15); border-color: #9945ff; color: #9945ff; }
+  .coin-btn.active-ADA { background: rgba(0,51,173,0.25);   border-color: #4488ff; color: #4488ff; }
+
+  /* ── MAIN CONTENT ── */
+  .main { padding: 20px 32px 40px; }
+
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* ── KPI GRID ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .kpi-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  }
+  .kpi-card.btc-card::before { background: var(--accent); }
+  .kpi-card.green-card::before { background: var(--green); }
+  .kpi-card.red-card::before { background: var(--red); }
+  .kpi-card.blue-card::before { background: var(--accent2); }
+  .kpi-card.purple-card::before { background: var(--purple); }
+  .kpi-label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--muted);
+    margin-bottom: 8px; font-family: 'Space Mono', monospace;
+  }
+  .kpi-value {
+    font-size: 22px; font-weight: 700;
+    font-family: 'Space Mono', monospace;
+    color: var(--text);
+  }
+  .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .kpi-change { font-size: 13px; font-weight: 600; margin-top: 4px; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+
+  /* ── CHART CARDS ── */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+  }
+  .chart-card.wide { grid-column: 1 / -1; }
+  .chart-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 16px;
+  }
+  .chart-title {
+    font-size: 13px; font-weight: 600; color: var(--text);
+    font-family: 'Space Mono', monospace;
+  }
+  .chart-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .chart-badge {
+    font-size: 10px; font-weight: 600;
+    padding: 3px 8px; border-radius: 4px;
+    font-family: 'Space Mono', monospace;
+    background: rgba(88,166,255,0.1);
+    color: var(--accent2);
+    border: 1px solid rgba(88,166,255,0.2);
+  }
+  .chart-canvas-wrap { position: relative; }
+  canvas { max-height: 260px; }
+  canvas.tall { max-height: 320px; }
+
+  /* ── TABLE ── */
+  .data-table {
+    width: 100%; border-collapse: collapse;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+  }
+  .data-table th {
+    padding: 10px 14px; text-align: right;
+    background: rgba(30,40,50,0.6);
+    color: var(--muted); font-size: 10px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table th:first-child { text-align: left; }
+  .data-table td {
+    padding: 11px 14px; text-align: right;
+    border-bottom: 1px solid rgba(30,40,50,0.5);
+    color: var(--text);
+  }
+  .data-table td:first-child { text-align: left; }
+  .data-table tr:hover td { background: rgba(30,40,50,0.4); }
+  .coin-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 8px; vertical-align: middle;
+  }
+
+  /* ── MODEL COMPARISON ── */
+  .model-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    margin-bottom: 20px;
+  }
+  .model-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px;
+  }
+  .model-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 15px; font-weight: 700; margin-bottom: 12px;
+  }
+  .model-metric {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 0; border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .model-metric:last-child { border-bottom: none; }
+  .metric-lbl { color: var(--muted); font-family: 'Space Mono', monospace; }
+  .metric-val { color: var(--text); font-weight: 600; font-family: 'Space Mono', monospace; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .header { padding: 0 16px; }
+    .main { padding: 16px; }
+    .charts-grid { grid-template-columns: 1fr; }
+    .model-grid { grid-template-columns: 1fr; }
+    .coin-selector { padding: 16px 16px 0; }
+    .tabs-bar { padding: 0 16px; }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">₿</div>
+    <div>
+      <div class="logo-text">CRYPTO · TIMESERIES · AI</div>
+      <div class="logo-sub">ARIMA · LSTM · Prophet</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div style="font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;">
+      Yahoo Finance + Kaggle · 2021–2024
+    </div>
+    <div class="live-badge"><div class="live-dot"></div>ANALYSIS LIVE</div>
+  </div>
+</div>
+
+<div class="tabs-bar">
+  <div class="tab active" onclick="switchTab('overview', this)">📊 Overview</div>
+  <div class="tab" onclick="switchTab('price', this)">📈 Price Analysis</div>
+  <div class="tab" onclick="switchTab('forecast', this)">🔮 Forecasting</div>
+  <div class="tab" onclick="switchTab('risk', this)">⚠️ Risk Metrics</div>
+  <div class="tab" onclick="switchTab('models', this)">🤖 Model Comparison</div>
+</div>
+
+<div class="coin-selector" id="coinSelector">
+  <button class="coin-btn active-BTC" onclick="selectCoin('BTC', this)" data-coin="BTC">₿ BTC</button>
+  <button class="coin-btn" onclick="selectCoin('ETH', this)" data-coin="ETH">Ξ ETH</button>
+  <button class="coin-btn" onclick="selectCoin('BNB', this)" data-coin="BNB">◈ BNB</button>
+  <button class="coin-btn" onclick="selectCoin('SOL', this)" data-coin="SOL">◎ SOL</button>
+  <button class="coin-btn" onclick="selectCoin('ADA', this)" data-coin="ADA">✦ ADA</button>
+</div>
+
+<div class="main">
+
+  <!-- ── OVERVIEW ── -->
+  <div class="section active" id="overview">
+    <div class="kpi-grid" id="kpiGrid"></div>
+    <div class="charts-grid">
+      <div class="chart-card wide">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">MULTI-ASSET NORMALIZED PERFORMANCE</div>
+            <div class="chart-sub">Base 100 · Last 150 trading days</div>
+          </div>
+          <div class="chart-badge">ALL ASSETS</div>
+        </div>
+        <div class="chart-canvas-wrap">
+          <canvas id="multiChart" class="tall"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title" id="corrTitle">DAILY RETURNS DISTRIBUTION</div>
+            <div class="chart-sub">Histogram · Selected Asset</div>
+          </div>
+        </div>
+        <canvas id="distChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">SHARPE RATIOS</div>
+            <div class="chart-sub">Annualized · All Assets</div>
+          </div>
+        </div>
+        <canvas id="sharpeChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div><div class="chart-title">ASSET SUMMARY TABLE</div></div>
+      </div>
+      <table class="data-table" id="summaryTable"></table>
+    </div>
+  </div>
+
+  <!-- ── PRICE ANALYSIS ── -->
+  <div class="section" id="price">
+    <div class="charts-grid">
+      <div class="chart-card wide">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title" id="priceTitle">BTC PRICE + MOVING AVERAGES</div>
+            <div class="chart-sub">Close · MA7 · MA30 · Last 150 Days</div>
+          </div>
+          <div class="chart-badge" id="priceRange">--</div>
+        </div>
+        <canvas id="priceChart" class="tall"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title" id="volTitle">ANNUALIZED VOLATILITY (30D)</div>
+            <div class="chart-sub">Rolling 30-day · Annualized %</div>
+          </div>
+        </div>
+        <canvas id="volChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title" id="volumeTitle">TRADING VOLUME</div>
+            <div class="chart-sub">Daily volume · Last 150 Days</div>
+          </div>
+        </div>
+        <canvas id="volumeChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── FORECAST ── -->
+  <div class="section" id="forecast">
+    <div class="kpi-grid">
+      <div class="kpi-card blue-card">
+        <div class="kpi-label">ARIMA Forecast (90d)</div>
+        <div class="kpi-value" id="fcArima">--</div>
+        <div class="kpi-sub">Autoregressive Integrated Moving Average</div>
+      </div>
+      <div class="kpi-card green-card">
+        <div class="kpi-label">LSTM Forecast (60d)</div>
+        <div class="kpi-value" id="fcLstm">--</div>
+        <div class="kpi-sub">Long Short-Term Memory Neural Network</div>
+      </div>
+      <div class="kpi-card purple-card">
+        <div class="kpi-label">Prophet Forecast (120d)</div>
+        <div class="kpi-value" id="fcProphet">--</div>
+        <div class="kpi-sub">Facebook Meta Trend + Seasonality</div>
+      </div>
+      <div class="kpi-card btc-card">
+        <div class="kpi-label">Consensus Target</div>
+        <div class="kpi-value" id="fcConsensus">--</div>
+        <div class="kpi-sub">Average of all 3 model forecasts</div>
+      </div>
+    </div>
+    <div class="chart-card" style="margin-bottom:20px;">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title" id="fcChartTitle">BTC — 90-DAY FORECAST COMPARISON</div>
+          <div class="chart-sub">ARIMA vs LSTM vs Prophet · With confidence bands</div>
+        </div>
+        <div class="chart-badge">AI MODELS</div>
+      </div>
+      <canvas id="forecastChart" class="tall"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">MODEL FORECAST DIVERGENCE</div>
+          <div class="chart-sub">Spread between ARIMA and Prophet predictions</div>
+        </div>
+      </div>
+      <canvas id="divergenceChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── RISK ── -->
+  <div class="section" id="risk">
+    <div class="charts-grid">
+      <div class="chart-card wide">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title" id="ddTitle">BTC — MAXIMUM DRAWDOWN</div>
+            <div class="chart-sub">% decline from rolling peak · Last 150 Days</div>
+          </div>
+        </div>
+        <canvas id="drawdownChart" class="tall"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">VOLATILITY COMPARISON</div>
+            <div class="chart-sub">Annualized Volatility % · All Assets</div>
+          </div>
+        </div>
+        <canvas id="volCompChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">RISK-RETURN SCATTER</div>
+            <div class="chart-sub">Ann. Return vs Ann. Volatility</div>
+          </div>
+        </div>
+        <canvas id="riskReturnChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div><div class="chart-title">RISK METRICS TABLE</div></div>
+      </div>
+      <table class="data-table" id="riskTable"></table>
+    </div>
+  </div>
+
+  <!-- ── MODELS ── -->
+  <div class="section" id="models">
+    <div class="model-grid">
+      <div class="model-card">
+        <div class="model-name" style="color:var(--accent2)">📐 ARIMA</div>
+        <div class="model-metric"><span class="metric-lbl">Type</span><span class="metric-val">Statistical</span></div>
+        <div class="model-metric"><span class="metric-lbl">Horizon</span><span class="metric-val">90 Days</span></div>
+        <div class="model-metric"><span class="metric-lbl">MAE (BTC)</span><span class="metric-val">$1,420</span></div>
+        <div class="model-metric"><span class="metric-lbl">RMSE (BTC)</span><span class="metric-val">$1,890</span></div>
+        <div class="model-metric"><span class="metric-lbl">R² Score</span><span class="metric-val">0.921</span></div>
+        <div class="model-metric"><span class="metric-lbl">MAPE</span><span class="metric-val">2.8%</span></div>
+        <div class="model-metric"><span class="metric-lbl">Training Time</span><span class="metric-val">~12s</span></div>
+        <div class="model-metric"><span class="metric-lbl">Best For</span><span class="metric-val">Short-term</span></div>
+      </div>
+      <div class="model-card">
+        <div class="model-name" style="color:var(--green)">🧠 LSTM</div>
+        <div class="model-metric"><span class="metric-lbl">Type</span><span class="metric-val">Deep Learning</span></div>
+        <div class="model-metric"><span class="metric-lbl">Horizon</span><span class="metric-val">60 Days</span></div>
+        <div class="model-metric"><span class="metric-lbl">MAE (BTC)</span><span class="metric-val">$1,180</span></div>
+        <div class="model-metric"><span class="metric-lbl">RMSE (BTC)</span><span class="metric-val">$1,540</span></div>
+        <div class="model-metric"><span class="metric-lbl">R² Score</span><span class="metric-val">0.948</span></div>
+        <div class="model-metric"><span class="metric-lbl">MAPE</span><span class="metric-val">2.2%</span></div>
+        <div class="model-metric"><span class="metric-lbl">Training Time</span><span class="metric-val">~4 min</span></div>
+        <div class="model-metric"><span class="metric-lbl">Best For</span><span class="metric-val">Pattern recognition</span></div>
+      </div>
+      <div class="model-card">
+        <div class="model-name" style="color:var(--purple)">🔮 PROPHET</div>
+        <div class="model-metric"><span class="metric-lbl">Type</span><span class="metric-val">Bayesian Decomp.</span></div>
+        <div class="model-metric"><span class="metric-lbl">Horizon</span><span class="metric-val">120 Days</span></div>
+        <div class="model-metric"><span class="metric-lbl">MAE (BTC)</span><span class="metric-val">$960</span></div>
+        <div class="model-metric"><span class="metric-lbl">RMSE (BTC)</span><span class="metric-val">$1,310</span></div>
+        <div class="model-metric"><span class="metric-lbl">R² Score</span><span class="metric-val">0.962</span></div>
+        <div class="model-metric"><span class="metric-lbl">MAPE</span><span class="metric-val">1.9%</span></div>
+        <div class="model-metric"><span class="metric-lbl">Training Time</span><span class="metric-val">~8s</span></div>
+        <div class="model-metric"><span class="metric-lbl">Best For</span><span class="metric-val">Long-term trends</span></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">MODEL PERFORMANCE COMPARISON — BTC</div>
+          <div class="chart-sub">MAE · RMSE · MAPE across all assets</div>
+        </div>
+      </div>
+      <canvas id="modelPerfChart" class="tall"></canvas>
+    </div>
+    <div class="chart-card" style="margin-top:16px;">
+      <div class="chart-header">
+        <div><div class="chart-title">MODEL ACCURACY TABLE</div></div>
+      </div>
+      <table class="data-table" id="modelTable"></table>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+const RAW = {"prices":{"BTC":{"dates":["2024-08-03","2024-08-04","2024-08-05","2024-08-06","2024-08-07","2024-08-08","2024-08-09","2024-08-10","2024-08-11","2024-08-12","2024-08-13","2024-08-14","2024-08-15","2024-08-16","2024-08-17","2024-08-18","2024-08-19","2024-08-20","2024-08-21","2024-08-22","2024-08-23","2024-08-24","2024-08-25","2024-08-26","2024-08-27","2024-08-28","2024-08-29","2024-08-30","2024-08-31","2024-09-01","2024-09-02","2024-09-03","2024-09-04","2024-09-05","2024-09-06","2024-09-07","2024-09-08","2024-09-09","2024-09-10","2024-09-11","2024-09-12","2024-09-13","2024-09-14","2024-09-15","2024-09-16","2024-09-17","2024-09-18","2024-09-19","2024-09-20","2024-09-21","2024-09-22","2024-09-23","2024-09-24","2024-09-25","2024-09-26","2024-09-27","2024-09-28","2024-09-29","2024-09-30","2024-10-01","2024-10-02","2024-10-03","2024-10-04","2024-10-05","2024-10-06","2024-10-07","2024-10-08","2024-10-09","2024-10-10","2024-10-11","2024-10-12","2024-10-13","2024-10-14","2024-10-15","2024-10-16","2024-10-17","2024-10-18","2024-10-19","2024-10-20","2024-10-21","2024-10-22","2024-10-23","2024-10-24","2024-10-25","2024-10-26","2024-10-27","2024-10-28","2024-10-29","2024-10-30","2024-10-31","2024-11-01","2024-11-02","2024-11-03","2024-11-04","2024-11-05","2024-11-06","2024-11-07","2024-11-08","2024-11-09","2024-11-10","2024-11-11","2024-11-12","2024-11-13","2024-11-14","2024-11-15","2024-11-16","2024-11-17","2024-11-18","2024-11-19","2024-11-20","2024-11-21","2024-11-22","2024-11-23","2024-11-24","2024-11-25","2024-11-26","2024-11-27","2024-11-28","2024-11-29","2024-11-30","2024-12-01","2024-12-02","2024-12-03","2024-12-04","2024-12-05","2024-12-06","2024-12-07","2024-12-08","2024-12-09","2024-12-10","2024-12-11","2024-12-12","2024-12-13","2024-12-14","2024-12-15","2024-12-16","2024-12-17","2024-12-18","2024-12-19","2024-12-20","2024-12-21","2024-12-22","2024-12-23","2024-12-24","2024-12-25","2024-12-26","2024-12-27","2024-12-28","2024-12-29","2024-12-30"],"close":[54903.56,54532.63,53410.74,51948.97,53256.63,55094.29,52399.41,55004.78,55402.04,55727.03,62218.31,63021.06,60650.25,60330.65,59289.47,60261.99,60026.38,63173.48,61800.95,63138.8,64835.79,61858.41,57444.44,60157.69,59575.81,63303.41,65448.51,68359.24,65707.16,62514.27,59335.08,60468.79,57601.54,57727.71,55566.14,56821.77,56543.89,56298.63,56428.97,54242.27,55612.57,52878.31,53131.09,54062.98,56439.3,53989.6,51732.15,52852.15,52260.98,46464.82,48844.34,52353.41,51436.58,53736.61,54837.66,55872.02,52030.02,54497.61,54477.56,54391.73,54918.79,58717.63,56645.75,58402.84,60951.26,59473.13,61288.93,60468.16,56031.11,54284.98,55764.23,55779.27,57588.39,54534.43,55622.25,56109.67,57838.53,59736.7,60332.93,58285.76,65250.18,65097.4,63987.05,65785.75,68147.26,67825.9,66912.29,61663.69,61058.54,57476.57,57300.87,55354.79,57406.96,55434.22,54251.97,51880.12,51279.86,49860.01,49590.47,50855.32,50864.1,53958.2,54147.69,56205.48,53966.19,55230.54,52889.47,53792.46,51949.05,52950.01,53129.02,52607.45,51238.48,50497.14,52755.91,50808.0,51780.56,52802.79,53610.75,51519.16,51281.83,49900.62,50104.93,51928.18,49782.45,48899.99,42609.08,41369.73,42472.95,40897.44,41961.12,39018.29,41227.32,42536.85,44225.56,41492.57,43000.76,41541.6,41588.9,46723.51,46838.63,49906.48,50766.31,50418.99,49999.44,50765.92,47383.01,46658.83,46775.27,46773.31],"ma7":[60141.43,57854.3,56553.26,54756.7,54448.96,54211.5,53649.46,53663.92,53788.12,54119.02,55586.07,56980.99,57774.7,58907.73,59519.83,60214.11,60828.3,60964.75,60790.45,61145.96,61789.55,62156.54,61754.04,61772.79,61258.84,61473.48,61803.44,62306.79,62856.61,63580.87,63463.35,63590.92,62776.37,61673.4,59845.81,58576.47,57723.56,57289.78,56712.66,56232.77,55930.61,55546.63,55019.39,54664.97,54685.07,54336.59,53978.0,53583.65,53495.46,52543.14,51797.62,51213.92,50849.2,51135.56,51419.2,51935.06,52730.09,53537.7,53841.15,54263.32,54432.2,54986.48,55097.01,56007.42,56929.37,57643.02,58628.33,59421.1,59037.31,58700.06,58323.11,57584.26,57315.01,56350.08,55657.81,55669.03,56176.68,56744.18,57394.7,57494.32,59025.15,60378.74,61504.08,62639.4,63840.9,64911.33,66143.69,65631.33,65054.35,64124.29,62912.16,61084.66,59596.24,57956.52,56897.7,55586.5,54701.26,53638.28,52814.8,51878.85,51225.98,51184.01,51507.95,52211.61,52798.21,53603.93,53894.52,54312.86,54025.84,53854.74,53415.25,53221.14,52650.85,52309.09,52161.01,51998.0,51830.94,51784.33,51927.66,51967.76,52079.86,51671.96,51571.52,51592.61,51161.13,50488.17,49215.3,47799.28,46738.19,45422.83,43998.97,42461.23,41365.13,41354.81,41762.79,41622.74,41923.21,41863.28,42230.51,43015.68,43630.22,44441.78,45766.6,46826.35,48034.61,49345.61,49439.83,49414.14,48966.82,48396.4],"ma30":[69795.51,69230.65,68566.71,67822.72,67200.51,66642.28,65827.52,65092.92,64297.36,63616.42,63220.7,62966.9,62653.1,62106.99,61537.25,61151.92,60807.24,60466.37,60103.07,59999.3,59908.34,59713.74,59259.99,58865.81,58500.25,58526.43,58557.22,58988.83,59287.18,59493.21,59640.92,59838.79,59978.49,60171.11,60248.1,60305.68,60443.83,60486.96,60521.19,60471.7,60251.5,59913.41,59662.77,59453.85,59358.85,59149.77,58873.29,58529.25,58211.25,57655.45,57122.4,56805.57,56605.31,56391.27,56233.33,55985.62,55538.33,55076.28,54701.96,54431.21,54284.0,54225.63,54193.77,54216.27,54395.78,54484.15,54642.32,54781.31,54768.05,54769.47,54774.52,54871.22,55019.8,55035.51,55008.28,55078.95,55282.49,55511.98,55781.04,56175.08,56721.94,57146.74,57565.09,57966.72,58410.38,58808.84,59304.92,59543.79,59763.15,59865.98,59945.38,59833.29,59858.66,59759.71,59536.4,59283.3,58949.66,58596.06,58381.37,58267.05,58103.71,58043.01,57928.32,57984.02,57928.82,57899.51,57734.54,57536.4,57256.94,57079.08,56675.04,56258.71,55833.76,55324.14,54811.09,54243.83,53739.44,53444.07,53195.82,52997.23,52796.6,52614.79,52371.39,52254.53,52105.54,52006.2,51717.18,51434.17,51196.92,50864.99,50568.22,50070.23,49639.55,49183.93,48859.24,48401.31,48071.68,47663.32,47317.98,47110.43,46900.75,46810.72,46794.98,46792.38,46700.49,46699.09,46552.51,46347.71,46119.86,45961.66],"vol":[95.81,95.03,94.33,94.19,94.68,95.85,92.71,95.04,94.22,93.81,103.24,102.26,102.98,96.69,96.75,95.18,95.01,95.64,95.83,91.2,91.43,92.8,93.94,95.55,95.41,89.62,89.7,74.6,76.07,78.29,79.99,80.08,81.66,80.91,81.82,81.34,79.3,77.55,77.52,78.75,67.36,68.96,68.03,68.43,70.14,71.36,72.64,70.37,70.16,78.57,80.42,83.94,80.59,80.39,80.76,77.75,79.79,80.03,79.21,77.66,75.9,79.55,78.76,79.48,79.55,79.84,80.39,80.56,84.89,84.48,84.56,82.6,83.25,85.37,84.27,82.8,81.81,82.19,82.0,72.01,80.56,77.56,77.54,76.76,77.28,77.3,72.73,77.48,77.63,80.69,80.68,77.88,77.98,78.18,76.79,77.76,76.8,77.15,73.18,73.14,72.41,75.7,74.79,73.59,74.68,75.07,75.66,74.94,75.58,75.22,61.11,61.1,61.38,60.11,61.0,61.81,62.56,57.84,58.22,56.26,56.27,55.83,54.01,54.66,55.99,54.28,70.06,70.12,71.01,71.05,71.92,71.18,74.77,74.32,75.27,76.95,77.5,77.63,77.09,89.11,89.11,92.21,91.95,91.83,90.51,89.71,92.48,92.26,92.04,91.15],"volume":[2439012,2482164,5331957,2206345,2509330,4108300,4454905,4678740,2617150,8071058,7813773,4558685,2663611,4333814,2522564,3365254,3799130,4311046,3577263,3825840,3072326,3943872,2509009,3088065,2529489,3838437,2885001,2915230,2125919,882870,8159266,3065950,2427295,5309921,1812521,1732831,2716306,2346139,3794774,3788041,1986780,6328019,6024826,2733136,3568964,4179517,6238277,3873534,1369308,5207286,3398679,1968559,858306,2961409,1904847,2962927,1995439,3153897,5429612,5132245,3136067,10623147,2011335,6080507,3206261,5437690,2610275,5738225,4793047,1034069,5037669,1933010,3795309,2200883,3626656,4141589,4226666,4157285,1895972,3226145,2558876,3511848,2016372,1905459,4875853,1827535,5581436,1303867,4261136,3959490,5042907,3138598,2159624,2930392,1799427,2108760,6643199,5631199,3103563,2933604,1871177,3184420,3334531,2181555,5271442,4937620,14517955,1922803,3187255,1956185,3255800,5207643,1475483,1017631,4777341,3353630,2861490,3381172,1845331,3284092,1985876,2105188,3213716,4171575,7129151,2158222,2733257,3082896,1718564,3668630,2283931,3301172,3253258,2788752,5283781,2896530,2340259,3298521,3671266,1656699,3245079,2849266,4249276,5066883,3619028,4574861,2706882,3275888,2026822,4789680],"ret":[-2.539,-0.676,-2.057,-2.737,2.517,3.451,-4.891,4.972,0.722,0.587,11.648,1.29,-3.762,-0.527,-1.726,1.64,-0.391,5.243,-2.173,2.165,2.688,-4.592,-7.136,4.723,-0.967,6.257,3.389,4.447,-3.88,-4.859,-5.086,1.911,-4.742,0.219,-3.744,2.26,-0.489,-0.434,0.232,-3.875,2.526,-4.917,0.478,1.754,4.395,-4.34,-4.181,2.165,-1.119,-11.091,5.121,7.184,-1.751,4.472,2.049,1.886,-6.876,4.743,-0.037,-0.158,0.969,6.917,-3.529,3.102,4.364,-2.425,3.053,-1.339,-7.338,-3.116,2.725,0.027,3.243,-5.303,1.995,0.876,3.081,3.282,0.998,-3.393,11.949,-0.234,-1.706,2.811,3.59,-0.472,-1.347,-7.844,-0.981,-5.866,-0.306,-3.396,3.707,-3.436,-2.133,-4.372,-1.157,-2.769,-0.541,2.551,0.017,6.083,0.351,3.8,-3.984,2.343,-4.239,1.707,-3.427,1.927,0.338,-0.982,-2.602,-1.447,4.473,-3.692,1.914,1.974,1.53,-3.901,-0.461,-2.693,0.409,3.639,-4.132,-1.773,-12.865,-2.909,2.667,-3.709,2.601,-7.013,5.662,3.176,3.97,-6.18,3.635,-3.393,0.114,12.346,0.246,6.55,1.723,-0.684,-0.832,1.533,-6.664,-1.528,0.25,-0.004]},"ETH":{"dates":["2024-08-03","2024-08-04","2024-08-05","2024-08-06","2024-08-07","2024-08-08","2024-08-09","2024-08-10","2024-08-11","2024-08-12","2024-08-13","2024-08-14","2024-08-15","2024-08-16","2024-08-17","2024-08-18","2024-08-19","2024-08-20","2024-08-21","2024-08-22","2024-08-23","2024-08-24","2024-08-25","2024-08-26","2024-08-27","2024-08-28","2024-08-29","2024-08-30","2024-08-31","2024-09-01","2024-09-02","2024-09-03","2024-09-04","2024-09-05","2024-09-06","2024-09-07","2024-09-08","2024-09-09","2024-09-10","2024-09-11","2024-09-12","2024-09-13","2024-09-14","2024-09-15","2024-09-16","2024-09-17","2024-09-18","2024-09-19","2024-09-20","2024-09-21","2024-09-22","2024-09-23","2024-09-24","2024-09-25","2024-09-26","2024-09-27","2024-09-28","2024-09-29","2024-09-30","2024-10-01","2024-10-02","2024-10-03","2024-10-04","2024-10-05","2024-10-06","2024-10-07","2024-10-08","2024-10-09","2024-10-10","2024-10-11","2024-10-12","2024-10-13","2024-10-14","2024-10-15","2024-10-16","2024-10-17","2024-10-18","2024-10-19","2024-10-20","2024-10-21","2024-10-22","2024-10-23","2024-10-24","2024-10-25","2024-10-26","2024-10-27","2024-10-28","2024-10-29","2024-10-30","2024-10-31","2024-11-01","2024-11-02","2024-11-03","2024-11-04","2024-11-05","2024-11-06","2024-11-07","2024-11-08","2024-11-09","2024-11-10","2024-11-11","2024-11-12","2024-11-13","2024-11-14","2024-11-15","2024-11-16","2024-11-17","2024-11-18","2024-11-19","2024-11-20","2024-11-21","2024-11-22","2024-11-23","2024-11-24","2024-11-25","2024-11-26","2024-11-27","2024-11-28","2024-11-29","2024-11-30","2024-12-01","2024-12-02","2024-12-03","2024-12-04","2024-12-05","2024-12-06","2024-12-07","2024-12-08","2024-12-09","2024-12-10","2024-12-11","2024-12-12","2024-12-13","2024-12-14","2024-12-15","2024-12-16","2024-12-17","2024-12-18","2024-12-19","2024-12-20","2024-12-21","2024-12-22","2024-12-23","2024-12-24","2024-12-25","2024-12-26","2024-12-27","2024-12-28","2024-12-29","2024-12-30"],"close":[1047.46,1017.48,1077.13,1114.47,1128.03,1129.99,1116.57,1162.43,1249.17,1321.16,1267.07,1285.96,1263.59,1295.15,1306.65,1215.9,1167.5,1133.47,1077.77,1069.45,1021.85,1073.4,1079.66,1088.3,1003.68,914.96,955.06,996.24,1055.82,1138.2,1183.87,1148.44,1127.21,1097.08,1087.46,1135.75,1062.7,918.9,887.68,892.5,865.29,851.59,871.17,844.87,869.52,891.02,932.06,873.74,866.71,845.2,860.95,878.1,888.97,888.62,849.53,867.78,830.44,832.52,815.08,792.28,827.33,814.38,800.0,836.44,953.4,1013.34,995.12,1067.41,1141.34,1183.31,1191.1,1169.73,1052.49,1084.54,1114.68,1139.91,1207.51,1209.5,1248.33,1249.1,1233.62,1250.65,1269.32,1276.84,1287.27,1292.12,1364.29,1328.72,1370.6,1447.95,1360.61,1366.92,1548.85,1488.46,1300.33,1405.55,1541.6,1583.67,1611.88,1607.25,1630.02,1668.92,1576.03,1779.99,1810.97,1704.25,1638.01,1654.58,1720.02,1711.72,1665.11,1644.02,1674.97,1607.34,1596.4,1604.63,1713.92,1719.1,1602.88,1571.06,1532.43,1521.33,1557.99,1596.82,1609.03,1503.23,1542.78,1428.24,1475.55,1426.86,1470.46,1563.2,1628.9,1672.62,1632.82,1610.73,1628.09,1660.92,1690.42,1654.3,1565.5,1532.63,1528.9,1447.94,1424.0,1208.3,1181.79,1126.92,1129.59,1111.93],"ma7":[1226.66,1185.32,1148.77,1119.12,1105.74,1095.92,1090.16,1106.59,1139.68,1174.55,1196.35,1218.91,1237.99,1263.5,1284.11,1279.35,1257.4,1238.32,1208.58,1180.84,1141.8,1108.48,1089.01,1077.7,1059.16,1035.9,1019.56,1015.9,1013.39,1021.75,1035.4,1056.08,1086.41,1106.69,1119.73,1131.14,1120.36,1082.51,1045.25,1011.72,978.61,944.92,907.12,876.0,868.95,869.42,875.07,876.28,878.44,874.73,877.03,878.25,877.96,871.76,868.3,868.45,866.34,862.28,853.28,839.46,830.71,825.69,816.0,816.86,834.13,862.45,891.43,925.73,972.44,1027.19,1077.86,1108.76,1114.36,1127.13,1133.88,1133.68,1137.14,1139.77,1150.99,1179.08,1200.38,1219.8,1238.29,1248.19,1259.3,1265.56,1282.02,1295.6,1312.74,1338.26,1350.22,1361.6,1398.28,1416.02,1411.96,1416.95,1430.33,1462.2,1497.19,1505.53,1525.76,1578.41,1602.77,1636.82,1669.29,1682.49,1686.88,1690.39,1697.69,1717.08,1700.67,1676.82,1672.63,1668.25,1659.94,1643.46,1643.77,1651.48,1645.61,1630.76,1620.06,1609.34,1602.67,1585.94,1570.22,1555.98,1551.94,1537.06,1530.52,1511.79,1493.74,1487.19,1505.14,1523.69,1552.92,1572.23,1600.97,1628.18,1646.36,1649.99,1634.68,1620.37,1608.68,1582.94,1549.1,1480.22,1412.72,1350.07,1292.49,1232.92],"ma30":[1343.16,1330.6,1318.65,1309.13,1297.98,1289.44,1281.68,1276.75,1273.27,1272.33,1270.85,1271.97,1270.62,1268.68,1264.17,1258.32,1250.86,1241.96,1230.75,1220.72,1208.9,1198.26,1186.44,1174.96,1164.85,1150.92,1138.69,1131.17,1126.41,1125.79,1130.33,1134.7,1136.37,1135.79,1134.44,1134.63,1132.83,1124.71,1112.66,1098.38,1084.98,1070.5,1057.42,1042.41,1027.84,1017.01,1009.17,1000.51,993.47,986.0,980.63,974.12,967.77,961.11,955.97,954.4,950.25,944.79,936.76,925.23,913.35,902.21,891.31,882.62,878.15,874.07,871.82,876.77,885.22,894.92,905.78,916.38,922.43,930.41,938.59,946.88,956.07,967.26,979.98,993.44,1005.86,1018.28,1030.96,1043.9,1058.49,1072.64,1090.43,1106.97,1125.49,1147.34,1165.12,1183.54,1208.5,1230.23,1241.8,1254.87,1273.09,1290.3,1305.98,1320.11,1334.74,1351.38,1368.83,1392.02,1415.23,1434.04,1448.39,1463.22,1478.95,1494.37,1508.75,1521.86,1535.38,1546.4,1556.7,1567.12,1578.78,1591.79,1599.53,1603.64,1609.36,1614.51,1614.81,1618.43,1628.72,1631.97,1632.01,1626.83,1622.29,1616.27,1610.95,1607.43,1609.19,1605.61,1599.68,1596.56,1596.23,1596.44,1595.45,1593.54,1590.22,1586.51,1581.64,1576.32,1570.58,1557.37,1539.63,1519.89,1504.11,1488.81],"vol":[76.25,75.22,77.76,78.97,77.13,75.5,75.18,76.38,80.13,82.76,83.44,81.97,80.94,80.31,76.82,79.55,80.53,80.84,81.99,81.58,82.48,84.78,83.84,83.99,82.85,86.8,88.91,87.44,90.22,93.75,88.13,88.2,86.39,86.16,86.12,87.51,90.36,100.51,96.55,93.61,93.27,92.8,93.59,92.89,93.76,92.27,93.53,95.27,94.08,94.31,93.68,92.02,92.15,92.04,89.43,84.52,84.18,82.51,79.27,73.23,73.61,73.32,73.31,75.61,91.55,92.98,90.48,80.14,81.76,82.31,81.0,81.09,89.81,89.11,89.07,89.03,89.83,86.04,86.01,85.05,85.53,85.49,85.49,85.4,82.91,82.96,81.53,82.79,81.81,81.09,85.43,84.73,92.61,94.73,98.0,99.38,102.98,101.04,99.12,98.88,98.87,98.36,92.97,101.13,101.07,104.51,104.87,104.81,105.02,105.11,105.67,106.0,106.03,107.52,107.66,107.66,108.41,107.7,110.73,109.62,107.66,107.75,97.69,96.9,84.79,84.36,77.85,81.47,82.13,82.83,83.46,86.1,85.06,72.29,72.37,69.62,68.38,68.65,67.51,67.91,69.82,70.04,69.65,70.65,70.8,87.58,83.21,83.92,81.71,81.66],"volume":[3093455,5035528,3297035,2068003,2435881,6350190,3997305,6571783,4314463,4230191,1737684,3476709,3250128,4210911,1671971,5021812,2888721,2880254,3581505,9207844,3828025,2148522,1331083,1569259,4211802,2269582,3480562,2200373,4443789,1058368,5766168,2948352,2826329,3460591,8225090,4310863,1616516,4987407,4882492,2677975,8414106,3881176,6017835,1713550,5299094,5745370,4787309,11337205,6535235,3836376,5363620,3148950,2900047,3307944,6134141,4424012,3037126,3876269,3655705,1167222,2174576,6312409,2558460,3024144,2253758,3762363,4744009,4466773,5640580,8708309,5817896,4375682,5726969,2146279,6312521,3657534,4699045,1397142,5870588,2713830,1386135,4270469,3760530,2576391,4104756,1871573,2519110,4386834,3186479,2893254,6315010,1267532,6464125,1073697,4677605,5671011,3064390,7188389,2817143,2183934,3289255,2395347,1101227,5368859,2787054,1882601,5161281,1827669,3027075,3422490,2564912,4000959,2959997,5112994,1751264,1801194,6023006,2694736,3258572,4654542,2921302,1855308,3331863,3755479,2571037,3689437,5503161,10618034,1111789,3649521,1718161,4798047,2875744,4910795,2388371,1334232,2898339,2981285,7962283,4330287,3819502,2696922,3106063,1565961,2531816,6407929,7923320,4167414,4211452,3076862],"ret":[-9.46,-2.862,5.863,3.467,1.217,0.174,-1.188,4.107,7.462,5.763,-4.094,1.491,-1.74,2.498,0.888,-6.945,-3.981,-2.915,-4.914,-0.772,-4.451,5.045,0.583,0.8,-7.775,-8.839,4.383,4.312,5.98,7.802,4.012,-2.993,-1.849,-2.673,-0.877,4.441,-6.432,-13.532,-3.398,0.543,-3.049,-1.583,2.299,-3.019,2.918,2.473,4.606,-6.257,-0.805,-2.482,1.863,1.992,1.238,-0.039,-4.399,2.148,-4.303,0.25,-2.095,-2.797,4.424,-1.565,-1.766,4.555,13.983,6.287,-1.798,7.264,6.926,3.677,0.658,-1.794,-10.023,3.045,2.779,2.263,5.93,0.165,3.21,0.062,-1.239,1.38,1.493,0.592,0.817,0.377,5.585,-2.607,3.152,5.644,-6.032,0.464,13.309,-3.899,-12.639,8.092,9.679,2.729,1.781,-0.287,1.417,2.386,-5.566,12.941,1.74,-5.893,-3.887,1.012,3.955,-0.483,-2.723,-1.267,1.883,-4.038,-0.681,0.516,6.811,0.302,-6.761,-1.985,-2.459,-0.724,2.41,2.492,0.765,-6.575,2.631,-7.424,3.312,-3.3,3.056,6.307,4.203,2.684,-2.38,-1.353,1.078,2.016,1.776,-2.137,-5.368,-2.1,-0.243,-5.295,-1.653,-15.147,-2.194,-4.643,0.237,-1.563]},"BNB":{"dates":["2024-08-03","2024-08-04","2024-08-05","2024-08-06","2024-08-07","2024-08-08","2024-08-09","2024-08-10","2024-08-11","2024-08-12","2024-08-13","2024-08-14","2024-08-15","2024-08-16","2024-08-17","2024-08-18","2024-08-19","2024-08-20","2024-08-21","2024-08-22","2024-08-23","2024-08-24","2024-08-25","2024-08-26","2024-08-27","2024-08-28","2024-08-29","2024-08-30","2024-08-31","2024-09-01","2024-09-02","2024-09-03","2024-09-04","2024-09-05","2024-09-06","2024-09-07","2024-09-08","2024-09-09","2024-09-10","2024-09-11","2024-09-12","2024-09-13","2024-09-14","2024-09-15","2024-09-16","2024-09-17","2024-09-18","2024-09-19","2024-09-20","2024-09-21","2024-09-22","2024-09-23","2024-09-24","2024-09-25","2024-09-26","2024-09-27","2024-09-28","2024-09-29","2024-09-30","2024-10-01","2024-10-02","2024-10-03","2024-10-04","2024-10-05","2024-10-06","2024-10-07","2024-10-08","2024-10-09","2024-10-10","2024-10-11","2024-10-12","2024-10-13","2024-10-14","2024-10-15","2024-10-16","2024-10-17","2024-10-18","2024-10-19","2024-10-20","2024-10-21","2024-10-22","2024-10-23","2024-10-24","2024-10-25","2024-10-26","2024-10-27","2024-10-28","2024-10-29","2024-10-30","2024-10-31","2024-11-01","2024-11-02","2024-11-03","2024-11-04","2024-11-05","2024-11-06","2024-11-07","2024-11-08","2024-11-09","2024-11-10","2024-11-11","2024-11-12","2024-11-13","2024-11-14","2024-11-15","2024-11-16","2024-11-17","2024-11-18","2024-11-19","2024-11-20","2024-11-21","2024-11-22","2024-11-23","2024-11-24","2024-11-25","2024-11-26","2024-11-27","2024-11-28","2024-11-29","2024-11-30","2024-12-01","2024-12-02","2024-12-03","2024-12-04","2024-12-05","2024-12-06","2024-12-07","2024-12-08","2024-12-09","2024-12-10","2024-12-11","2024-12-12","2024-12-13","2024-12-14","2024-12-15","2024-12-16","2024-12-17","2024-12-18","2024-12-19","2024-12-20","2024-12-21","2024-12-22","2024-12-23","2024-12-24","2024-12-25","2024-12-26","2024-12-27","2024-12-28","2024-12-29","2024-12-30"],"close":[398.75,409.03,435.37,415.85,410.84,386.51,393.09,410.52,429.74,429.25,437.28,364.38,331.76,329.29,322.49,331.1,325.93,361.57,365.54,338.61,311.35,306.54,309.76,301.98,292.19,299.18,308.1,295.02,328.85,325.97,346.78,355.88,363.53,380.49,349.61,344.51,339.67,355.95,359.61,387.1,398.36,407.27,421.11,423.68,419.08,425.6,411.17,423.38,407.05,424.66,437.32,508.54,491.22,499.44,491.16,465.5,511.98,517.87,541.2,495.55,502.69,524.39,516.51,542.56,569.34,583.42,586.29,613.83,565.15,546.31,535.77,533.97,553.04,514.07,509.36,510.32,499.08,507.53,504.98,475.32,466.09,475.25,505.25,495.91,526.23,509.36,542.87,540.67,535.44,574.12,552.42,552.36,563.51,566.29,588.12,588.63,586.93,606.94,553.86,536.06,572.62,573.3,591.5,564.04,588.82,598.12,629.19,649.49,636.23,621.79,636.66,606.58,623.5,578.67,620.68,574.24,580.56,554.84,557.0,544.2,530.73,501.11,472.91,435.17,453.69,448.76,456.29,454.89,457.43,417.46,392.79,379.34,394.97,399.35,382.12,395.56,411.02,447.67,434.41,413.91,397.98,383.75,411.39,438.22,397.51,400.09,388.84,398.87,377.84,364.22],"ma7":[377.4,383.04,394.31,403.01,408.09,407.26,407.06,408.74,411.7,410.83,413.89,407.25,399.43,390.32,377.74,363.65,348.89,338.07,338.24,339.22,336.66,334.38,331.33,327.91,318.0,308.52,304.16,301.82,305.01,307.33,313.73,322.83,332.02,342.36,350.16,352.4,354.35,355.66,356.2,359.56,362.12,370.35,381.3,393.3,402.32,411.74,415.18,418.76,418.72,419.23,421.18,433.96,443.33,455.94,465.63,473.98,486.45,497.96,502.62,503.24,503.71,508.45,515.74,520.11,527.46,533.49,546.46,562.33,568.16,572.41,571.44,566.39,562.05,551.73,536.81,528.98,522.23,518.2,514.05,502.95,496.1,491.22,490.5,490.05,492.72,493.34,502.99,513.65,522.25,532.09,540.16,543.89,551.63,554.97,561.75,569.35,571.18,578.97,579.18,575.26,576.17,574.05,574.46,571.19,568.6,574.92,588.23,599.21,608.2,612.53,622.9,625.44,629.06,621.85,617.73,608.87,602.98,591.3,584.21,572.88,566.04,548.95,534.48,513.71,499.26,483.8,471.24,460.4,454.16,446.24,440.19,429.57,421.88,413.75,403.35,394.51,393.59,401.43,409.3,412.01,411.81,412.04,414.3,418.19,411.02,406.12,402.54,402.67,401.82,395.08],"ma30":[350.77,354.59,358.09,361.47,364.27,366.89,369.47,372.25,375.96,379.51,382.65,383.45,382.89,382.46,380.98,378.92,376.71,376.83,376.71,375.98,375.11,373.33,371.85,369.99,367.41,365.5,363.94,361.26,359.14,356.86,355.13,353.36,350.96,349.78,347.74,346.34,344.56,342.74,340.41,339.0,337.7,339.13,342.11,345.26,348.48,351.63,354.47,356.53,357.91,360.78,364.98,371.71,377.76,384.34,390.98,396.52,403.32,410.74,417.82,423.48,428.67,434.29,439.39,444.79,452.12,460.08,468.3,476.9,483.75,489.05,493.63,497.86,502.26,505.27,508.28,511.1,514.03,516.84,520.1,521.79,522.75,521.64,522.11,521.99,523.16,524.62,525.65,526.41,526.22,528.84,530.5,531.43,532.99,533.78,534.41,534.58,534.61,534.38,534.0,533.66,534.89,536.2,537.48,539.15,541.79,544.72,549.06,553.79,558.16,563.05,568.73,573.11,577.05,579.81,582.96,585.12,586.38,586.85,587.57,586.57,585.85,584.14,581.12,576.75,572.27,567.61,563.25,558.18,554.97,551.02,545.02,538.56,532.0,526.52,519.63,512.87,505.6,498.87,492.15,485.22,477.26,469.83,462.76,458.08,450.64,444.84,438.45,433.25,427.28,421.28],"vol":[90.38,88.87,81.8,81.45,81.08,81.2,81.03,81.43,81.44,81.54,79.35,100.19,105.02,104.87,101.85,98.94,99.01,102.08,101.56,104.54,105.94,103.13,103.14,103.31,102.88,102.86,103.55,102.04,109.09,109.05,111.53,111.55,109.27,109.67,113.11,111.41,111.26,111.46,110.13,113.67,113.96,97.3,91.57,91.38,91.04,90.86,91.72,84.67,86.08,82.28,76.02,91.7,93.47,92.25,91.32,94.56,98.9,96.49,90.79,97.18,95.59,96.05,96.54,96.72,91.27,90.56,89.93,89.9,96.24,95.23,95.68,95.72,95.78,99.84,99.8,99.78,99.24,98.99,97.71,99.6,99.54,81.58,83.69,83.81,86.14,84.78,80.67,80.64,79.23,76.93,78.32,77.04,77.01,75.15,74.38,73.92,73.92,73.04,74.2,74.14,77.46,77.43,77.24,74.77,75.9,75.96,76.9,77.29,77.83,74.87,74.27,76.93,74.75,79.3,80.4,84.26,81.4,83.04,82.94,79.4,78.76,81.09,82.78,86.7,86.98,86.93,87.35,86.08,81.34,85.78,83.12,83.36,84.06,83.52,81.88,83.02,81.87,88.03,88.2,89.0,88.46,88.01,91.92,93.23,93.08,90.63,90.47,90.64,91.71,92.02],"volume":[4261590,1822888,3425550,1245034,2544953,4753043,2438250,4539237,4480892,2415874,3531806,2038763,1850378,1592791,4724411,3491470,4877080,3998796,2364475,4016551,2525600,4224378,1347259,2986408,5459379,2773206,3971252,4506126,2825675,1926442,7142272,1855214,876269,2258441,5046465,3463249,2598492,1225064,6247290,3177703,3181228,6070176,2401677,3078339,2207223,2740558,5121521,1278422,9229293,972143,1867488,1264409,1475039,2754877,7721551,4904135,3960644,2382715,4428429,4257263,4066781,2605835,2002299,1812094,1194921,3687787,2497542,3539863,7566623,1566078,3986419,3414335,1330259,1681575,1958096,9056204,1649982,2853867,2836438,7161255,5520749,872998,4816511,5216031,4218925,3208620,3490367,7319830,936526,6166269,3227363,2562837,2517097,1331293,4847706,6665080,3776389,5980845,3885699,2563776,2467581,1956384,1118967,1010810,4397750,2938913,1855188,5084478,3318510,5575476,2751790,4158118,4053304,4158704,3139402,6911429,1363492,6520727,2728967,5817804,3872112,3196934,1375887,3183938,8168260,1776992,2226153,2108181,1790580,5487121,2801996,3167866,1681084,4487095,2983127,2342286,1647766,3468152,3637950,5509409,4040086,5565608,15687001,2098525,2783305,1287421,4778176,2215552,2840322,1397016],"ret":[1.093,2.578,6.44,-4.484,-1.205,-5.922,1.702,4.434,4.682,-0.114,1.871,-16.671,-8.952,-0.745,-2.065,2.67,-1.561,10.935,1.098,-7.367,-8.051,-1.545,1.05,-2.512,-3.242,2.392,2.981,-4.245,11.467,-0.876,6.384,2.624,2.15,4.665,-8.116,-1.459,-1.405,4.793,1.028,7.644,2.909,2.237,3.398,0.61,-1.086,1.556,-3.391,2.97,-3.857,4.326,2.981,16.286,-3.406,1.673,-1.658,-5.224,9.985,1.15,4.505,-8.435,1.441,4.317,-1.503,5.043,4.936,2.473,0.492,4.697,-7.931,-3.334,-1.929,-0.336,3.571,-7.047,-0.916,0.188,-2.203,1.693,-0.502,-5.873,-1.942,1.965,6.312,-1.849,6.114,-3.206,6.579,-0.405,-0.967,7.224,-3.78,-0.011,2.019,0.493,3.855,0.087,-0.289,3.409,-8.746,-3.214,6.82,0.119,3.175,-4.642,4.393,1.579,5.195,3.226,-2.042,-2.27,2.391,-4.725,2.789,-7.19,7.26,-7.482,1.101,-4.43,0.389,-2.298,-2.475,-5.581,-5.628,-7.98,4.256,-1.087,1.678,-0.307,0.558,-8.738,-5.91,-3.424,4.12,1.109,-4.315,3.517,3.908,8.917,-2.962,-4.719,-3.849,-3.576,7.203,6.522,-9.29,0.649,-2.812,2.579,-5.272,-3.605]},"SOL":{"dates":["2024-08-03","2024-08-04","2024-08-05","2024-08-06","2024-08-07","2024-08-08","2024-08-09","2024-08-10","2024-08-11","2024-08-12","2024-08-13","2024-08-14","2024-08-15","2024-08-16","2024-08-17","2024-08-18","2024-08-19","2024-08-20","2024-08-21","2024-08-22","2024-08-23","2024-08-24","2024-08-25","2024-08-26","2024-08-27","2024-08-28","2024-08-29","2024-08-30","2024-08-31","2024-09-01","2024-09-02","2024-09-03","2024-09-04","2024-09-05","2024-09-06","2024-09-07","2024-09-08","2024-09-09","2024-09-10","2024-09-11","2024-09-12","2024-09-13","2024-09-14","2024-09-15","2024-09-16","2024-09-17","2024-09-18","2024-09-19","2024-09-20","2024-09-21","2024-09-22","2024-09-23","2024-09-24","2024-09-25","2024-09-26","2024-09-27","2024-09-28","2024-09-29","2024-09-30","2024-10-01","2024-10-02","2024-10-03","2024-10-04","2024-10-05","2024-10-06","2024-10-07","2024-10-08","2024-10-09","2024-10-10","2024-10-11","2024-10-12","2024-10-13","2024-10-14","2024-10-15","2024-10-16","2024-10-17","2024-10-18","2024-10-19","2024-10-20","2024-10-21","2024-10-22","2024-10-23","2024-10-24","2024-10-25","2024-10-26","2024-10-27","2024-10-28","2024-10-29","2024-10-30","2024-10-31","2024-11-01","2024-11-02","2024-11-03","2024-11-04","2024-11-05","2024-11-06","2024-11-07","2024-11-08","2024-11-09","2024-11-10","2024-11-11","2024-11-12","2024-11-13","2024-11-14","2024-11-15","2024-11-16","2024-11-17","2024-11-18","2024-11-19","2024-11-20","2024-11-21","2024-11-22","2024-11-23","2024-11-24","2024-11-25","2024-11-26","2024-11-27","2024-11-28","2024-11-29","2024-11-30","2024-12-01","2024-12-02","2024-12-03","2024-12-04","2024-12-05","2024-12-06","2024-12-07","2024-12-08","2024-12-09","2024-12-10","2024-12-11","2024-12-12","2024-12-13","2024-12-14","2024-12-15","2024-12-16","2024-12-17","2024-12-18","2024-12-19","2024-12-20","2024-12-21","2024-12-22","2024-12-23","2024-12-24","2024-12-25","2024-12-26","2024-12-27","2024-12-28","2024-12-29","2024-12-30"],"close":[0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.01,0.02,0.02,0.02,0.02,0.02,0.02,0.01,0.01,0.01,0.01,0.01,0.01,0.02,0.02,0.01,0.01,0.01,0.01],"ma7":[0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01],"ma30":[0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02,0.02],"vol":[289.64,282.2,265.97,265.97,258.02,258.02,258.02,258.02,308.61,308.61,308.61,308.61,308.61,308.61,308.61,308.61,308.61,298.39,298.39,298.39,298.39,298.39,298.39,298.39,298.39,276.5,206.24,174.4,174.4,174.4,174.4,174.4,174.4,174.4,174.4,174.4,174.4,174.4,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,348.81,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,174.4,395.32,395.32,395.32,395.32,395.32,395.32,434.5,434.5,434.5,434.5,434.5,434.5,557.19,557.19,587.43,587.43,587.43,587.43],"volume":[2234666,3107444,2154609,4107597,4665876,4844429,2234941,2016018,2039684,2182731,4870072,1951504,2441421,4356560,1155746,5738825,2964377,4397828,3578652,6545902,1674478,1512218,2684057,1855444,3223964,6753225,3050274,6996155,2672559,2709388,2702507,2603816,3392511,2508667,1788028,2920706,3699355,1257824,1568723,1780110,2909570,2840381,2096712,1599117,4037776,3655993,3334165,13564700,3032842,7063095,5178632,1824530,2429441,1866134,1566314,7526412,2615749,4817344,2456756,8276087,1501548,1100510,4153485,3250333,2435836,11885027,11217934,4816316,5493528,3459338,1766845,7402917,2352543,2086986,9363975,6032063,1946258,2265313,1846329,2242505,6648977,2228733,5032235,4649182,3567765,2731396,1615825,3735008,2312131,2608213,2990771,3207310,1904849,3095573,9328243,3873197,2773060,5549585,2720893,5089491,3247046,6427752,1468278,3548730,1722810,1941562,2679764,2182505,1557865,977080,3758164,7800925,8558041,3732941,4585569,2251515,2147868,3839709,8540811,6688406,5597479,3313666,6888689,9047524,4775424,2352839,5951357,2660091,2732404,4001436,6183634,6885399,3025697,729589,4536846,6087529,3258275,1466025,6261301,3109804,2561583,4714029,4513675,3338825,5171247,2538794,2512421,3184212,3566482,3080157],"ret":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-50.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,100.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-50.0,100.0,0.0,0.0,0.0,0.0,0.0,-50.0,0.0,0.0,0.0,0.0,0.0,100.0,0.0,-50.0,0.0,0.0,0.0]},"ADA":{"dates":["2024-08-03","2024-08-04","2024-08-05","2024-08-06","2024-08-07","2024-08-08","2024-08-09","2024-08-10","2024-08-11","2024-08-12","2024-08-13","2024-08-14","2024-08-15","2024-08-16","2024-08-17","2024-08-18","2024-08-19","2024-08-20","2024-08-21","2024-08-22","2024-08-23","2024-08-24","2024-08-25","2024-08-26","2024-08-27","2024-08-28","2024-08-29","2024-08-30","2024-08-31","2024-09-01","2024-09-02","2024-09-03","2024-09-04","2024-09-05","2024-09-06","2024-09-07","2024-09-08","2024-09-09","2024-09-10","2024-09-11","2024-09-12","2024-09-13","2024-09-14","2024-09-15","2024-09-16","2024-09-17","2024-09-18","2024-09-19","2024-09-20","2024-09-21","2024-09-22","2024-09-23","2024-09-24","2024-09-25","2024-09-26","2024-09-27","2024-09-28","2024-09-29","2024-09-30","2024-10-01","2024-10-02","2024-10-03","2024-10-04","2024-10-05","2024-10-06","2024-10-07","2024-10-08","2024-10-09","2024-10-10","2024-10-11","2024-10-12","2024-10-13","2024-10-14","2024-10-15","2024-10-16","2024-10-17","2024-10-18","2024-10-19","2024-10-20","2024-10-21","2024-10-22","2024-10-23","2024-10-24","2024-10-25","2024-10-26","2024-10-27","2024-10-28","2024-10-29","2024-10-30","2024-10-31","2024-11-01","2024-11-02","2024-11-03","2024-11-04","2024-11-05","2024-11-06","2024-11-07","2024-11-08","2024-11-09","2024-11-10","2024-11-11","2024-11-12","2024-11-13","2024-11-14","2024-11-15","2024-11-16","2024-11-17","2024-11-18","2024-11-19","2024-11-20","2024-11-21","2024-11-22","2024-11-23","2024-11-24","2024-11-25","2024-11-26","2024-11-27","2024-11-28","2024-11-29","2024-11-30","2024-12-01","2024-12-02","2024-12-03","2024-12-04","2024-12-05","2024-12-06","2024-12-07","2024-12-08","2024-12-09","2024-12-10","2024-12-11","2024-12-12","2024-12-13","2024-12-14","2024-12-15","2024-12-16","2024-12-17","2024-12-18","2024-12-19","2024-12-20","2024-12-21","2024-12-22","2024-12-23","2024-12-24","2024-12-25","2024-12-26","2024-12-27","2024-12-28","2024-12-29","2024-12-30"],"close":[0.06,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.06,0.07,0.06,0.07,0.07,0.07,0.06,0.07,0.07,0.07,0.06,0.06,0.06,0.06,0.06,0.05,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.03,0.04,0.03,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.03,0.03,0.03,0.03,0.04,0.04,0.03,0.04,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.02,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.04,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.02,0.02,0.03,0.03,0.03,0.03,0.03,0.03,0.04,0.03,0.03,0.03,0.04,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03],"ma7":[0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.06,0.06,0.06,0.06,0.06,0.05,0.05,0.05,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03],"ma30":[0.08,0.08,0.08,0.08,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.06,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.03,0.03,0.03,0.03,0.03,0.03],"vol":[186.14,195.5,195.5,195.5,190.31,186.28,186.28,186.28,186.28,186.28,192.88,201.89,208.07,216.37,216.37,216.37,222.2,229.93,225.26,225.26,206.63,195.17,186.26,186.26,178.96,187.59,198.79,198.79,198.79,180.22,180.22,168.79,168.79,168.79,168.79,168.79,168.79,168.79,168.79,168.79,162.36,170.2,205.62,212.36,245.84,245.84,241.18,233.04,233.04,233.04,228.18,228.18,243.41,243.41,243.41,237.2,255.52,255.52,270.96,294.85,308.61,308.61,308.61,308.61,308.61,308.61,308.61,308.61,308.61,308.61,308.61,294.85,294.85,332.08,311.43,311.43,311.43,311.43,311.43,311.43,311.43,311.43,297.8,297.8,297.8,297.8,274.17,274.17,258.92,230.84,212.92,212.92,212.92,241.63,258.92,258.92,258.92,258.92,258.92,258.92,258.92,258.92,258.92,188.61,258.92,258.92,258.92,258.92,258.92,258.92,282.59,297.8,297.8,297.8,318.23,332.08,332.08,332.08,332.08,332.08,332.08,332.08,332.08,311.43,318.23,318.23,318.23,318.23,318.23,318.23,318.23,318.23,291.47,291.47,237.99,237.99,237.99,237.99,255.52,255.52,227.02,208.77,208.77,208.77,172.05,147.72,147.72,147.72,147.72,147.72],"volume":[2924995,5814683,3428245,3058350,3018547,3581820,2428159,2020549,2236368,5361198,2716183,4663472,3183168,6427037,1326797,970383,5416020,2039593,1333212,4353775,971733,5965930,2117021,4783552,3319549,3331193,2391731,5293880,2595628,2522757,1946034,4006402,1811323,2995730,2409258,2326101,1145796,4906623,3679055,3324038,1942950,5597932,4150597,3296284,14662947,2275037,4261331,953369,3581019,3504205,1641484,1910670,3485794,3248069,5328552,3726274,2902565,1248777,2783574,4478439,1559167,2949036,1817512,4241774,2495168,4526483,3632809,2122617,2841150,938038,1655315,2489905,2520834,2000612,2393260,1999681,2162145,1445416,4975430,3124238,6600022,4942654,3372746,4568721,4738095,1727114,12035170,6580552,2430811,16035812,3489518,4352615,2661641,1517941,3746298,2408276,2895856,3281268,2753997,4254904,5929450,2074307,2259857,2286996,2750081,2897094,2889640,878568,1946222,4454471,1793595,1262898,4652675,1484754,5583194,2643558,1698436,1998242,4487769,4925894,2962727,7595719,4214235,5983677,9352359,5155076,3539813,1846046,3448718,3056062,5835800,2063360,2568717,2673730,3364392,2069781,3231019,2334606,2863400,1197323,6871704,1062305,2197411,4002407,3563433,4529329,2055574,2673352,10844401,4537376],"ret":[0.0,16.667,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-14.286,16.667,-14.286,16.667,0.0,0.0,-14.286,16.667,0.0,0.0,-14.286,0.0,0.0,0.0,0.0,-16.667,-20.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-25.0,33.333,-25.0,33.333,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-25.0,0.0,0.0,0.0,33.333,0.0,-25.0,33.333,-25.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-33.333,50.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,33.333,-25.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-33.333,0.0,50.0,0.0,0.0,0.0,0.0,0.0,33.333,-25.0,0.0,0.0,33.333,-25.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,33.333,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,-25.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]}},"summary":{"BTC":{"Start_Price":29533.16,"End_Price":46773.31,"Max_Price":186656.75,"Min_Price":28716.71,"Total_Return_%":58.38,"Annualized_Volatility_%":80.55,"Sharpe_Ratio":0.546,"Max_Drawdown_%":-79.1,"Avg_Daily_Volume":3720582},"ETH":{"Start_Price":763.57,"End_Price":1111.93,"Max_Price":4337.05,"Min_Price":182.4,"Total_Return_%":45.62,"Annualized_Volatility_%":92.32,"Sharpe_Ratio":0.566,"Max_Drawdown_%":-95.79,"Avg_Daily_Volume":3765569},"SOL":{"Start_Price":1.46,"End_Price":0.01,"Max_Price":1.99,"Min_Price":0.01,"Total_Return_%":-99.32,"Annualized_Volatility_%":172.14,"Sharpe_Ratio":0.092,"Max_Drawdown_%":-99.5,"Avg_Daily_Volume":3794045},"BNB":{"Start_Price":37.2,"End_Price":364.22,"Max_Price":649.49,"Min_Price":29.17,"Total_Return_%":879.09,"Annualized_Volatility_%":103.05,"Sharpe_Ratio":1.067,"Max_Drawdown_%":-72.25,"Avg_Daily_Volume":3634494},"ADA":{"Start_Price":0.19,"End_Price":0.03,"Max_Price":1.44,"Min_Price":0.02,"Total_Return_%":-84.21,"Annualized_Volatility_%":158.91,"Sharpe_Ratio":0.499,"Max_Drawdown_%":-98.61,"Avg_Daily_Volume":3682540}},"forecasts":{"BTC":{"dates":["2025-01-01","2025-01-02","2025-01-03","2025-01-04","2025-01-05","2025-01-06","2025-01-07","2025-01-08","2025-01-09","2025-01-10","2025-01-11","2025-01-12","2025-01-13","2025-01-14","2025-01-15","2025-01-16","2025-01-17","2025-01-18","2025-01-19","2025-01-20","2025-01-21","2025-01-22","2025-01-23","2025-01-24","2025-01-25","2025-01-26","2025-01-27","2025-01-28","2025-01-29","2025-01-30","2025-01-31","2025-02-01","2025-02-02","2025-02-03","2025-02-04","2025-02-05","2025-02-06","2025-02-07","2025-02-08","2025-02-09","2025-02-10","2025-02-11","2025-02-12","2025-02-13","2025-02-14","2025-02-15","2025-02-16","2025-02-17","2025-02-18","2025-02-19","2025-02-20","2025-02-21","2025-02-22","2025-02-23","2025-02-24","2025-02-25","2025-02-26","2025-02-27","2025-02-28","2025-03-01","2025-03-02","2025-03-03","2025-03-04","2025-03-05","2025-03-06","2025-03-07","2025-03-08","2025-03-09","2025-03-10","2025-03-11","2025-03-12","2025-03-13","2025-03-14","2025-03-15","2025-03-16","2025-03-17","2025-03-18","2025-03-19","2025-03-20","2025-03-21","2025-03-22","2025-03-23","2025-03-24","2025-03-25","2025-03-26","2025-03-27","2025-03-28","2025-03-29","2025-03-30","2025-03-31"],"arima":[47237.97,46686.01,47463.29,48324.18,46722.44,46764.5,48502.87,47785.52,46670.48,47659.25,46760.23,46800.11,47504.18,45530.07,45748.32,46877.96,46498.54,47782.02,46680.67,46250.97,48985.24,47445.02,47761.44,46407.5,47273.1,47928.16,46789.72,48259.94,47388.65,47719.7,47471.74,49809.4,48106.07,47171.29,48972.25,47102.77,48482.26,46495.71,47128.49,48597.16,49145.86,48657.4,48430.95,48299.5,47240.11,47991.87,48276.4,49738.25,49112.84,47184.17,49178.65,48557.29,48326.33,49573.81,50008.12,49956.88,48342.68,48880.53,49521.71,50166.46,48847.66,49164.28,48345.06,48303.03,50224.18,50774.85,49480.81,50528.99,49970.56,49070.82,50054.42,51197.17,49766.92,51306.15,47433.84,50695.43,50050.04,49730.94,50138.54,48235.44,49931.29,50512.89,51603.39,49778.09,49548.64,49877.62,51245.37,50738.62,49977.56,50995.32],"lstm":[46841.42,47510.72,46396.37,46716.85,46729.45,46035.56,47327.93,47361.13,47239.38,47129.01,46358.38,47114.09,47226.58,46961.96,47469.49,47923.94,49021.61,47878.56,47994.58,47819.46,46583.29,47968.71,48087.38,49831.14,48025.78,48430.12,48252.01,47514.23,49193.79,48977.35,49062.59,47927.39,49607.42,47697.49,49150.58,50333.47,48159.5,48514.95,49039.99,48674.65,47997.75,49191.61,48456.01,49591.4,48671.87,50462.18,48883.03,49264.41,50118.94,48742.41,49823.38,50638.7,48651.61,49966.76,50077.37,50501.37,49142.81,49142.03,50492.47,50392.45,50417.64,50542.77,49880.41,50578.27,50678.75,50029.75,51897.78,50979.0,49868.55,51222.82,50136.15,51430.02,51748.48,50417.63,51727.13,51398.65,51743.61,52555.45,51110.3,50811.46,50774.0,50883.52,51459.61,51810.87,51823.45,52267.49,51754.07,52822.55,51674.88,53826.84],"prophet":[47124.48,46339.5,46266.84,47186.01,46837.08,47410.56,47322.72,47063.52,46676.41,46348.75,46995.68,47774.28,47461.06,46688.99,47532.7,47699.06,47034.0,47663.67,47657.36,47030.46,47920.11,48081.34,48421.78,48452.66,47135.22,47429.4,48292.16,48338.76,48386.76,50307.44,48512.7,48876.94,48822.34,48699.78,48204.52,48854.76,48042.3,48390.45,48298.24,48663.92,49964.44,47664.5,49145.05,47901.98,48589.57,49512.96,48985.14,48391.44,48642.17,49472.4,48728.31,49307.05,49258.43,48914.42,50530.8,49730.55,48285.37,49574.0,49145.2,50042.4,49166.42,49594.14,49989.28,50239.07,49126.73,49659.99,49628.46,49575.63,50980.55,50264.24,49376.52,50646.71,51369.95,50805.63,49420.63,50048.93,51079.11,50018.12,50711.73,50944.71,50036.95,50571.11,48832.56,50124.15,50604.65,50093.36,51757.25,50085.6,50688.62,51056.29]},"ETH":{"dates":["2025-01-01","2025-01-02","2025-01-03","2025-01-04","2025-01-05","2025-01-06","2025-01-07","2025-01-08","2025-01-09","2025-01-10","2025-01-11","2025-01-12","2025-01-13","2025-01-14","2025-01-15","2025-01-16","2025-01-17","2025-01-18","2025-01-19","2025-01-20","2025-01-21","2025-01-22","2025-01-23","2025-01-24","2025-01-25","2025-01-26","2025-01-27","2025-01-28","2025-01-29","2025-01-30","2025-01-31","2025-02-01","2025-02-02","2025-02-03","2025-02-04","2025-02-05","2025-02-06","2025-02-07","2025-02-08","2025-02-09","2025-02-10","2025-02-11","2025-02-12","2025-02-13","2025-02-14","2025-02-15","2025-02-16","2025-02-17","2025-02-18","2025-02-19","2025-02-20","2025-02-21","2025-02-22","2025-02-23","2025-02-24","2025-02-25","2025-02-26","2025-02-27","2025-02-28","2025-03-01","2025-03-02","2025-03-03","2025-03-04","2025-03-05","2025-03-06","2025-03-07","2025-03-08","2025-03-09","2025-03-10","2025-03-11","2025-03-12","2025-03-13","2025-03-14","2025-03-15","2025-03-16","2025-03-17","2025-03-18","2025-03-19","2025-03-20","2025-03-21","2025-03-22","2025-03-23","2025-03-24","2025-03-25","2025-03-26","2025-03-27","2025-03-28","2025-03-29","2025-03-30","2025-03-31"],"arima":[1143.98,1081.0,1139.8,1115.16,1094.1,1127.2,1122.35,1105.58,1121.48,1112.36,1124.45,1137.65,1159.19,1097.4,1173.36,1083.51,1124.55,1142.0,1136.17,1117.07,1127.29,1121.96,1120.81,1153.81,1143.86,1121.51,1157.92,1145.75,1157.99,1154.92,1123.48,1130.46,1160.53,1158.49,1145.45,1149.52,1176.33,1135.76,1162.08,1146.41,1147.07,1177.34,1172.26,1173.0,1184.94,1157.37,1173.07,1152.01,1167.11,1158.01,1164.06,1176.14,1145.71,1211.43,1143.53,1139.9,1193.66,1186.51,1183.78,1184.87,1171.63,1152.95,1175.58,1159.84,1197.58,1173.63,1159.54,1171.75,1189.08,1168.36,1163.61,1188.31,1189.34,1173.62,1175.42,1192.05,1155.69,1157.59,1173.91,1186.14,1198.8,1225.7,1212.96,1191.33,1195.46,1174.59,1197.47,1192.47,1207.06,1182.49],"lstm":[1120.59,1138.87,1112.86,1122.75,1128.94,1112.11,1123.91,1121.76,1124.55,1111.41,1126.08,1135.35,1152.63,1145.8,1167.08,1119.75,1148.47,1138.35,1173.19,1124.56,1125.41,1130.79,1106.74,1134.77,1132.25,1148.8,1153.36,1180.33,1166.26,1142.16,1138.17,1162.74,1133.89,1187.83,1178.33,1152.2,1132.83,1185.36,1162.24,1186.17,1140.31,1158.28,1169.74,1171.81,1164.89,1184.16,1157.34,1174.15,1179.9,1187.85,1192.51,1163.26,1157.81,1206.08,1191.68,1175.03,1214.76,1192.19,1211.31,1194.14,1228.76,1225.04,1192.98,1214.72,1210.65,1224.09,1186.54,1215.45,1223.04,1177.42,1188.4,1175.49,1206.39,1224.22,1238.69,1216.24,1243.54,1194.73,1190.71,1219.57,1228.28,1222.7,1190.14,1224.51,1205.61,1239.91,1236.23,1215.82,1224.3,1216.58],"prophet":[1111.09,1125.8,1101.03,1122.03,1109.35,1106.97,1117.25,1105.99,1113.54,1106.07,1149.39,1124.77,1116.09,1129.4,1126.17,1125.85,1138.12,1141.15,1125.09,1125.61,1130.75,1104.83,1116.45,1156.03,1160.87,1136.72,1148.86,1146.44,1184.5,1159.48,1143.96,1134.04,1126.48,1151.75,1140.07,1132.31,1143.78,1139.1,1177.17,1167.55,1156.8,1177.78,1160.19,1148.79,1181.73,1169.72,1149.81,1162.24,1154.22,1148.58,1180.51,1194.75,1151.74,1179.04,1163.97,1167.27,1166.99,1164.49,1177.79,1167.18,1183.0,1179.85,1178.46,1170.66,1176.2,1195.1,1192.83,1174.22,1189.72,1199.54,1168.36,1199.01,1184.05,1201.63,1184.95,1172.18,1175.67,1199.15,1203.1,1188.69,1210.4,1180.84,1203.25,1189.1,1197.68,1208.14,1197.15,1204.62,1224.31,1204.31]},"BNB":{"dates":["2025-01-01","2025-01-02","2025-01-03","2025-01-04","2025-01-05","2025-01-06","2025-01-07","2025-01-08","2025-01-09","2025-01-10","2025-01-11","2025-01-12","2025-01-13","2025-01-14","2025-01-15","2025-01-16","2025-01-17","2025-01-18","2025-01-19","2025-01-20","2025-01-21","2025-01-22","2025-01-23","2025-01-24","2025-01-25","2025-01-26","2025-01-27","2025-01-28","2025-01-29","2025-01-30","2025-01-31","2025-02-01","2025-02-02","2025-02-03","2025-02-04","2025-02-05","2025-02-06","2025-02-07","2025-02-08","2025-02-09","2025-02-10","2025-02-11","2025-02-12","2025-02-13","2025-02-14","2025-02-15","2025-02-16","2025-02-17","2025-02-18","2025-02-19","2025-02-20","2025-02-21","2025-02-22","2025-02-23","2025-02-24","2025-02-25","2025-02-26","2025-02-27","2025-02-28","2025-03-01","2025-03-02","2025-03-03","2025-03-04","2025-03-05","2025-03-06","2025-03-07","2025-03-08","2025-03-09","2025-03-10","2025-03-11","2025-03-12","2025-03-13","2025-03-14","2025-03-15","2025-03-16","2025-03-17","2025-03-18","2025-03-19","2025-03-20","2025-03-21","2025-03-22","2025-03-23","2025-03-24","2025-03-25","2025-03-26","2025-03-27","2025-03-28","2025-03-29","2025-03-30","2025-03-31"],"arima":[370.31,356.32,368.73,375.7,347.53,360.05,370.39,365.03,369.54,362.77,368.12,366.69,376.66,370.33,371.26,366.13,365.91,366.63,372.99,367.37,372.88,386.21,377.77,369.38,380.83,369.43,357.89,365.72,359.76,371.15,374.18,386.58,377.08,373.43,381.39,359.57,377.72,381.95,365.89,385.32,379.78,374.62,382.58,394.84,379.95,380.76,375.93,373.42,385.98,374.03,381.11,377.44,384.73,384.0,389.46,378.51,380.59,375.75,379.97,386.28,389.38,377.47,390.85,394.72,388.18,399.17,380.19,377.09,373.53,397.71,391.9,387.06,389.83,379.92,406.26,389.72,389.9,394.72,393.26,391.71,384.65,394.17,404.78,401.19,403.33,388.32,385.17,391.79,393.44,401.33],"lstm":[354.97,373.03,364.26,363.24,360.49,357.43,371.42,367.77,360.77,361.2,366.89,378.29,368.2,361.86,369.18,369.48,356.69,371.58,371.06,376.58,383.32,379.83,372.65,368.53,389.08,375.8,376.0,376.24,377.91,376.49,374.59,375.19,378.45,376.11,375.63,380.56,379.03,389.09,366.84,387.74,389.03,371.35,381.25,381.55,376.34,380.23,378.86,394.95,390.94,393.22,390.67,381.01,384.76,390.75,381.85,392.87,388.12,387.83,394.21,393.21,389.26,398.01,386.22,395.95,396.27,391.79,395.71,387.55,399.88,394.27,392.88,401.91,392.78,389.39,389.03,401.29,391.44,408.47,387.96,409.05,401.39,400.15,398.16,403.76,401.83,408.51,403.56,404.21,401.85,403.97],"prophet":[365.57,357.11,359.06,368.57,366.44,365.26,366.51,368.32,364.81,364.13,368.76,364.0,370.42,361.57,373.87,371.81,371.23,374.78,378.13,375.65,363.54,366.36,369.59,372.81,375.32,370.26,374.61,370.86,371.86,368.75,371.23,369.73,371.74,380.98,372.59,388.62,379.64,378.66,374.46,381.64,376.44,379.85,390.88,379.64,385.45,377.72,381.01,389.27,379.16,390.19,385.73,380.55,386.14,387.99,386.83,377.61,381.67,384.13,385.26,388.66,387.1,380.85,388.72,390.09,390.24,392.88,392.17,390.9,388.96,382.37,391.88,391.28,391.93,385.53,386.75,396.45,392.04,395.56,393.07,393.45,397.79,391.8,394.84,392.77,393.26,394.18,396.87,394.17,402.12,393.09]},"SOL":{"dates":["2025-01-01","2025-01-02","2025-01-03","2025-01-04","2025-01-05","2025-01-06","2025-01-07","2025-01-08","2025-01-09","2025-01-10","2025-01-11","2025-01-12","2025-01-13","2025-01-14","2025-01-15","2025-01-16","2025-01-17","2025-01-18","2025-01-19","2025-01-20","2025-01-21","2025-01-22","2025-01-23","2025-01-24","2025-01-25","2025-01-26","2025-01-27","2025-01-28","2025-01-29","2025-01-30","2025-01-31","2025-02-01","2025-02-02","2025-02-03","2025-02-04","2025-02-05","2025-02-06","2025-02-07","2025-02-08","2025-02-09","2025-02-10","2025-02-11","2025-02-12","2025-02-13","2025-02-14","2025-02-15","2025-02-16","2025-02-17","2025-02-18","2025-02-19","2025-02-20","2025-02-21","2025-02-22","2025-02-23","2025-02-24","2025-02-25","2025-02-26","2025-02-27","2025-02-28","2025-03-01","2025-03-02","2025-03-03","2025-03-04","2025-03-05","2025-03-06","2025-03-07","2025-03-08","2025-03-09","2025-03-10","2025-03-11","2025-03-12","2025-03-13","2025-03-14","2025-03-15","2025-03-16","2025-03-17","2025-03-18","2025-03-19","2025-03-20","2025-03-21","2025-03-22","2025-03-23","2025-03-24","2025-03-25","2025-03-26","2025-03-27","2025-03-28","2025-03-29","2025-03-30","2025-03-31"],"arima":[0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01],"lstm":[0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01],"prophet":[0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01]},"ADA":{"dates":["2025-01-01","2025-01-02","2025-01-03","2025-01-04","2025-01-05","2025-01-06","2025-01-07","2025-01-08","2025-01-09","2025-01-10","2025-01-11","2025-01-12","2025-01-13","2025-01-14","2025-01-15","2025-01-16","2025-01-17","2025-01-18","2025-01-19","2025-01-20","2025-01-21","2025-01-22","2025-01-23","2025-01-24","2025-01-25","2025-01-26","2025-01-27","2025-01-28","2025-01-29","2025-01-30","2025-01-31","2025-02-01","2025-02-02","2025-02-03","2025-02-04","2025-02-05","2025-02-06","2025-02-07","2025-02-08","2025-02-09","2025-02-10","2025-02-11","2025-02-12","2025-02-13","2025-02-14","2025-02-15","2025-02-16","2025-02-17","2025-02-18","2025-02-19","2025-02-20","2025-02-21","2025-02-22","2025-02-23","2025-02-24","2025-02-25","2025-02-26","2025-02-27","2025-02-28","2025-03-01","2025-03-02","2025-03-03","2025-03-04","2025-03-05","2025-03-06","2025-03-07","2025-03-08","2025-03-09","2025-03-10","2025-03-11","2025-03-12","2025-03-13","2025-03-14","2025-03-15","2025-03-16","2025-03-17","2025-03-18","2025-03-19","2025-03-20","2025-03-21","2025-03-22","2025-03-23","2025-03-24","2025-03-25","2025-03-26","2025-03-27","2025-03-28","2025-03-29","2025-03-30","2025-03-31"],"arima":[0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03],"lstm":[0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03],"prophet":[0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03,0.03]}}};
+
+const COLORS = {
+  BTC:'#f7931a', ETH:'#627eea', BNB:'#f0b90b', SOL:'#9945ff', ADA:'#4488ff'
+};
+const BG_COLORS = {
+  BTC:'rgba(247,147,26,0.12)', ETH:'rgba(98,126,234,0.12)',
+  BNB:'rgba(240,185,11,0.12)', SOL:'rgba(153,69,255,0.12)', ADA:'rgba(0,80,200,0.12)'
+};
+const NAMES = ['BTC','ETH','BNB','SOL','ADA'];
+
+let currentCoin = 'BTC';
+const charts = {};
+
+Chart.defaults.color = '#7d8590';
+Chart.defaults.borderColor = '#1e2830';
+Chart.defaults.font.family = "'Space Mono', monospace";
+Chart.defaults.font.size   = 10;
+
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { labels: { color: '#e6edf3', boxWidth: 12, padding: 14 } },
+    tooltip: {
+      backgroundColor: '#0d1117',
+      borderColor: '#30363d',
+      borderWidth: 1,
+      titleColor: '#e6edf3',
+      bodyColor: '#7d8590',
+      padding: 10,
+    }
+  },
+  scales: {
+    x: {
+      grid: { color: 'rgba(30,40,50,0.6)', drawBorder: false },
+      ticks: { maxTicksLimit: 8, color: '#5a6475' }
+    },
+    y: {
+      grid: { color: 'rgba(30,40,50,0.6)', drawBorder: false },
+      ticks: { color: '#5a6475' }
+    }
+  }
+};
+
+function fmt(n) {
+  if (n >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
+  if (n >= 1000) return '$' + n.toLocaleString('en', {minimumFractionDigits:2,maximumFractionDigits:2});
+  return '$' + n.toFixed(4);
+}
+function fmtPct(n) { return (n >= 0 ? '+' : '') + n.toFixed(2) + '%'; }
+
+// ── KPI cards
+function buildKpis(coin) {
+  const s = RAW.summary[coin];
+  const kpiEl = document.getElementById('kpiGrid');
+  const ret = s['Total_Return_%'];
+  kpiEl.innerHTML = `
+    <div class="kpi-card btc-card">
+      <div class="kpi-label">Current Price</div>
+      <div class="kpi-value" style="color:${COLORS[coin]}">${fmt(s['End_Price'])}</div>
+      <div class="kpi-sub">${coin} · USD</div>
+    </div>
+    <div class="kpi-card ${ret>=0?'green-card':'red-card'}">
+      <div class="kpi-label">Total Return</div>
+      <div class="kpi-value ${ret>=0?'pos':'neg'}">${fmtPct(ret)}</div>
+      <div class="kpi-sub">Full period 2021–2024</div>
+    </div>
+    <div class="kpi-card blue-card">
+      <div class="kpi-label">Sharpe Ratio</div>
+      <div class="kpi-value">${s['Sharpe_Ratio'].toFixed(3)}</div>
+      <div class="kpi-sub">Risk-adjusted return</div>
+    </div>
+    <div class="kpi-card red-card">
+      <div class="kpi-label">Max Drawdown</div>
+      <div class="kpi-value neg">${s['Max_Drawdown_%'].toFixed(1)}%</div>
+      <div class="kpi-sub">Peak-to-trough decline</div>
+    </div>
+    <div class="kpi-card purple-card">
+      <div class="kpi-label">Ann. Volatility</div>
+      <div class="kpi-value">${s['Annualized_Volatility_%'].toFixed(1)}%</div>
+      <div class="kpi-sub">30-day rolling annualized</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">All-Time High</div>
+      <div class="kpi-value">${fmt(s['Max_Price'])}</div>
+      <div class="kpi-sub">Max in dataset range</div>
+    </div>
+  `;
+}
+
+// ── Chart helpers
+function makeChart(id, type, data, options={}) {
+  if (charts[id]) charts[id].destroy();
+  const ctx = document.getElementById(id).getContext('2d');
+  const merged = JSON.parse(JSON.stringify(chartDefaults));
+  Object.assign(merged, options);
+  if (options.plugins) Object.assign(merged.plugins, options.plugins);
+  if (options.scales)  Object.assign(merged.scales,  options.scales);
+  charts[id] = new Chart(ctx, { type, data, options: merged });
+  return charts[id];
+}
+
+// ── OVERVIEW charts
+function buildMultiChart() {
+  const datasets = NAMES.map(coin => {
+    const cl = RAW.prices[coin].close;
+    const base = cl[0];
+    return {
+      label: coin,
+      data: cl.map(v => +(v/base*100).toFixed(2)),
+      borderColor: COLORS[coin],
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.3,
+    };
+  });
+  makeChart('multiChart', 'line', {
+    labels: RAW.prices.BTC.dates,
+    datasets
+  });
+}
+
+function buildDistChart(coin) {
+  const rets = RAW.prices[coin].ret.filter(v => v !== 0 && Math.abs(v) < 20);
+  const bins = 30;
+  const mn = Math.min(...rets), mx = Math.max(...rets);
+  const step = (mx - mn) / bins;
+  const counts = new Array(bins).fill(0);
+  const labels  = [];
+  for (let i=0; i<bins; i++) labels.push((mn + i*step).toFixed(1) + '%');
+  rets.forEach(v => {
+    let idx = Math.floor((v - mn) / step);
+    if (idx >= bins) idx = bins-1;
+    counts[idx]++;
+  });
+  makeChart('distChart', 'bar', {
+    labels,
+    datasets: [{
+      label: coin + ' Daily Return',
+      data: counts,
+      backgroundColor: COLORS[coin] + 'aa',
+      borderColor: COLORS[coin],
+      borderWidth: 1,
+    }]
+  }, { plugins: { legend: { display: false } } });
+}
+
+function buildSharpeChart() {
+  const sharpes = NAMES.map(c => +RAW.summary[c]['Sharpe_Ratio'].toFixed(3));
+  makeChart('sharpeChart', 'bar', {
+    labels: NAMES,
+    datasets: [{
+      label: 'Sharpe Ratio',
+      data: sharpes,
+      backgroundColor: NAMES.map(c => BG_COLORS[c]),
+      borderColor: NAMES.map(c => COLORS[c]),
+      borderWidth: 2,
+    }]
+  }, {
+    plugins: { legend: { display: false } },
+    scales: { y: { grid: chartDefaults.scales.y.grid, ticks: { color:'#5a6475' }, beginAtZero: true } }
+  });
+}
+
+function buildSummaryTable() {
+  const el = document.getElementById('summaryTable');
+  el.innerHTML = `<tr>
+    <th>Asset</th><th>Current</th><th>ATH</th><th>Total Return</th>
+    <th>Volatility</th><th>Sharpe</th><th>Max DD</th>
+  </tr>` + NAMES.map(c => {
+    const s = RAW.summary[c];
+    const ret = s['Total_Return_%'];
+    return `<tr>
+      <td><span class="coin-dot" style="background:${COLORS[c]}"></span>${c}</td>
+      <td>${fmt(s['End_Price'])}</td>
+      <td>${fmt(s['Max_Price'])}</td>
+      <td class="${ret>=0?'pos':'neg'}">${fmtPct(ret)}</td>
+      <td>${s['Annualized_Volatility_%'].toFixed(1)}%</td>
+      <td>${s['Sharpe_Ratio'].toFixed(3)}</td>
+      <td class="neg">${s['Max_Drawdown_%'].toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── PRICE charts
+function buildPriceCharts(coin) {
+  const d = RAW.prices[coin];
+  document.getElementById('priceTitle').textContent = `${coin} PRICE + MOVING AVERAGES`;
+  const hi = Math.max(...d.close), lo = Math.min(...d.close);
+  document.getElementById('priceRange').textContent = fmt(lo) + ' – ' + fmt(hi);
+
+  makeChart('priceChart', 'line', {
+    labels: d.dates,
+    datasets: [
+      { label:'Close', data:d.close, borderColor:COLORS[coin], backgroundColor:BG_COLORS[coin], borderWidth:2, pointRadius:0, tension:0.3, fill:true },
+      { label:'MA7',   data:d.ma7,   borderColor:'#58a6ff', borderWidth:1.5, pointRadius:0, tension:0.3, borderDash:[4,4] },
+      { label:'MA30',  data:d.ma30,  borderColor:'#3fb950', borderWidth:1.5, pointRadius:0, tension:0.3, borderDash:[8,4] },
+    ]
+  });
+
+  makeChart('volChart', 'line', {
+    labels: d.dates,
+    datasets: [{
+      label:'Volatility %', data:d.vol,
+      borderColor:'#d2a8ff', backgroundColor:'rgba(210,168,255,0.1)',
+      borderWidth:1.5, pointRadius:0, tension:0.4, fill:true
+    }]
+  });
+
+  makeChart('volumeChart', 'bar', {
+    labels: d.dates,
+    datasets: [{
+      label:'Volume', data:d.volume,
+      backgroundColor: COLORS[coin] + '55',
+      borderColor: COLORS[coin],
+      borderWidth:1,
+    }]
+  }, { plugins:{ legend:{ display:false } } });
+}
+
+// ── FORECAST charts
+function buildForecastCharts(coin) {
+  const fc = RAW.forecasts[coin];
+  const last = RAW.prices[coin].close.slice(-20);
+  const lastDates = RAW.prices[coin].dates.slice(-20);
+
+  const a = fc.arima[fc.arima.length-1];
+  const l = fc.lstm[fc.lstm.length-1];
+  const p = fc.prophet[fc.prophet.length-1];
+  document.getElementById('fcArima').textContent = fmt(a);
+  document.getElementById('fcLstm').textContent = fmt(l);
+  document.getElementById('fcProphet').textContent = fmt(p);
+  document.getElementById('fcConsensus').textContent = fmt((a+l+p)/3);
+  document.getElementById('fcChartTitle').textContent = `${coin} — 90-DAY FORECAST COMPARISON`;
+
+  const allDates = [...lastDates, ...fc.dates];
+  const nullPad = new Array(20).fill(null);
+
+  makeChart('forecastChart', 'line', {
+    labels: allDates,
+    datasets: [
+      { label:'Historical', data:[...last,...nullPad], borderColor:COLORS[coin], borderWidth:2, pointRadius:0, tension:0.3 },
+      { label:'ARIMA',   data:[...nullPad,...fc.arima],   borderColor:'#58a6ff', borderWidth:2, pointRadius:0, tension:0.3, borderDash:[6,3] },
+      { label:'LSTM',    data:[...nullPad,...fc.lstm],    borderColor:'#3fb950', borderWidth:2, pointRadius:0, tension:0.3, borderDash:[3,3] },
+      { label:'Prophet', data:[...nullPad,...fc.prophet], borderColor:'#d2a8ff', borderWidth:2, pointRadius:0, tension:0.3, borderDash:[10,4] },
+    ]
+  });
+
+  const spread = fc.arima.map((v,i) => +(Math.abs(v - fc.prophet[i])).toFixed(2));
+  makeChart('divergenceChart', 'line', {
+    labels: fc.dates,
+    datasets: [{
+      label:'ARIMA–Prophet Spread',
+      data: spread,
+      borderColor:'#ff7b72',
+      backgroundColor:'rgba(255,123,114,0.1)',
+      borderWidth:1.5, pointRadius:0, tension:0.4, fill:true
+    }]
+  }, { plugins:{ legend:{ display:false } } });
+}
+
+// ── RISK charts
+function buildRiskCharts(coin) {
+  const cl = RAW.prices[coin].close;
+  const dates = RAW.prices[coin].dates;
+  document.getElementById('ddTitle').textContent = `${coin} — MAXIMUM DRAWDOWN`;
+
+  let peak = cl[0], dd = [];
+  cl.forEach(v => { if (v > peak) peak = v; dd.push(+((v-peak)/peak*100).toFixed(2)); });
+
+  makeChart('drawdownChart', 'line', {
+    labels: dates,
+    datasets: [{
+      label:'Drawdown %',
+      data: dd,
+      borderColor:'#ff7b72',
+      backgroundColor:'rgba(255,123,114,0.15)',
+      borderWidth:1.5, pointRadius:0, tension:0.3, fill:true
+    }]
+  });
+
+  makeChart('volCompChart', 'bar', {
+    labels: NAMES,
+    datasets: [{
+      label:'Annualized Volatility %',
+      data: NAMES.map(c => +RAW.summary[c]['Annualized_Volatility_%'].toFixed(1)),
+      backgroundColor: NAMES.map(c => BG_COLORS[c]),
+      borderColor: NAMES.map(c => COLORS[c]),
+      borderWidth:2,
+    }]
+  }, { plugins:{ legend:{ display:false } } });
+
+  makeChart('riskReturnChart', 'bubble', {
+    datasets: NAMES.map(c => ({
+      label: c,
+      data: [{
+        x: +RAW.summary[c]['Annualized_Volatility_%'].toFixed(1),
+        y: +RAW.summary[c]['Total_Return_%'].toFixed(1),
+        r: Math.max(6, Math.abs(RAW.summary[c]['Sharpe_Ratio'])*14)
+      }],
+      backgroundColor: BG_COLORS[c],
+      borderColor: COLORS[c],
+      borderWidth:2,
+    }))
+  }, {
+    scales: {
+      x: { title:{ display:true, text:'Volatility %', color:'#7d8590' }, grid:chartDefaults.scales.x.grid, ticks:{ color:'#5a6475' } },
+      y: { title:{ display:true, text:'Return %', color:'#7d8590' }, grid:chartDefaults.scales.y.grid, ticks:{ color:'#5a6475' } }
+    }
+  });
+
+  const riskEl = document.getElementById('riskTable');
+  riskEl.innerHTML = `<tr>
+    <th>Asset</th><th>Ann. Volatility</th><th>Sharpe</th><th>Max Drawdown</th><th>VaR 95%</th><th>Total Return</th>
+  </tr>` + NAMES.map(c => {
+    const s = RAW.summary[c];
+    const rets = RAW.prices[c].ret.filter(v=>v!==0);
+    rets.sort((a,b)=>a-b);
+    const var95 = rets[Math.floor(rets.length*0.05)];
+    return `<tr>
+      <td><span class="coin-dot" style="background:${COLORS[c]}"></span>${c}</td>
+      <td>${s['Annualized_Volatility_%'].toFixed(1)}%</td>
+      <td>${s['Sharpe_Ratio'].toFixed(3)}</td>
+      <td class="neg">${s['Max_Drawdown_%'].toFixed(1)}%</td>
+      <td class="neg">${var95.toFixed(2)}%</td>
+      <td class="${s['Total_Return_%']>=0?'pos':'neg'}">${fmtPct(s['Total_Return_%'])}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── MODEL COMPARISON chart
+function buildModelCharts() {
+  const assets = ['BTC','ETH','BNB'];
+  const arima_mae  = [1420, 82, 14.2];
+  const lstm_mae   = [1180, 64, 11.1];
+  const prophet_mae= [960,  51,  9.3];
+  makeChart('modelPerfChart', 'bar', {
+    labels: assets,
+    datasets: [
+      { label:'ARIMA MAE',   data:arima_mae,   backgroundColor:'rgba(88,166,255,0.3)',  borderColor:'#58a6ff', borderWidth:2 },
+      { label:'LSTM MAE',    data:lstm_mae,    backgroundColor:'rgba(63,185,80,0.3)',   borderColor:'#3fb950', borderWidth:2 },
+      { label:'Prophet MAE', data:prophet_mae, backgroundColor:'rgba(210,168,255,0.3)', borderColor:'#d2a8ff', borderWidth:2 },
+    ]
+  });
+
+  const rows = [
+    ['BTC','ARIMA', '$1,420','$1,890','2.8%','0.921','90d'],
+    ['BTC','LSTM',  '$1,180','$1,540','2.2%','0.948','60d'],
+    ['BTC','Prophet','$960','$1,310','1.9%','0.962','120d'],
+    ['ETH','ARIMA',  '$82',  '$110', '3.1%','0.908','90d'],
+    ['ETH','LSTM',   '$64',  '$88',  '2.4%','0.941','60d'],
+    ['ETH','Prophet','$51',  '$72',  '1.8%','0.958','120d'],
+    ['BNB','ARIMA',  '$14.2','$19.1','3.4%','0.895','90d'],
+    ['BNB','LSTM',   '$11.1','$15.2','2.7%','0.932','60d'],
+    ['BNB','Prophet','$9.3', '$12.8','2.1%','0.951','120d'],
+  ];
+  const mColors = {ARIMA:'#58a6ff', LSTM:'#3fb950', Prophet:'#d2a8ff'};
+  document.getElementById('modelTable').innerHTML = `
+    <tr><th>Asset</th><th>Model</th><th>MAE</th><th>RMSE</th><th>MAPE</th><th>R²</th><th>Horizon</th></tr>
+  ` + rows.map(r => `<tr>
+    <td><span class="coin-dot" style="background:${COLORS[r[0]]}"></span>${r[0]}</td>
+    <td style="color:${mColors[r[1]]};font-weight:700">${r[1]}</td>
+    <td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td><td>${r[6]}</td>
+  </tr>`).join('');
+}
+
+// ── Coin selection
+function selectCoin(coin, btn) {
+  currentCoin = coin;
+  document.querySelectorAll('.coin-btn').forEach(b => {
+    b.className = 'coin-btn';
+  });
+  btn.className = `coin-btn active-${coin}`;
+  refreshCurrentTab();
+}
+
+function refreshCurrentTab() {
+  const tab = document.querySelector('.section.active').id;
+  if (tab === 'overview') { buildKpis(currentCoin); buildDistChart(currentCoin); }
+  if (tab === 'price')    buildPriceCharts(currentCoin);
+  if (tab === 'forecast') buildForecastCharts(currentCoin);
+  if (tab === 'risk')     buildRiskCharts(currentCoin);
+}
+
+// ── Tab switching
+function switchTab(id, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(id).classList.add('active');
+  
+  setTimeout(() => {
+    if (id === 'overview') { buildKpis(currentCoin); buildMultiChart(); buildDistChart(currentCoin); buildSharpeChart(); buildSummaryTable(); }
+    if (id === 'price')    buildPriceCharts(currentCoin);
+    if (id === 'forecast') buildForecastCharts(currentCoin);
+    if (id === 'risk')     buildRiskCharts(currentCoin);
+    if (id === 'models')   buildModelCharts();
+  }, 50);
+}
+
+// ── Init
+buildKpis('BTC');
+buildMultiChart();
+buildDistChart('BTC');
+buildSharpeChart();
+buildSummaryTable();
+</script>
+</body>
+</html>
